@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PARENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LedgerStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  WAIVED
+}
+
+enum PaymentMethod {
+  RAZORPAY
+  CASH
+  UPI
+  BANK
+}
+
+enum PaymentSource {
+  ONLINE
+  MANUAL
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         Role
+  phone        String?
+  createdAt    DateTime   @default(now()) @map("created_at")
+  students     Student[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Student {
+  id              String        @id @default(uuid())
+  name            String
+  admissionNumber String        @unique @map("admission_number")
+  class           String
+  section         String
+  parentId        String        @map("parent_id")
+  admissionDate   DateTime      @map("admission_date")
+  status          StudentStatus @default(ACTIVE)
+  leaveDate       DateTime?     @map("leave_date")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  parent          User          @relation(fields: [parentId], references: [id])
+  ledgers         Ledger[]
+
+  @@map("students")
+}
+
+model FeeStructure {
+  id             String   @id @default(uuid())
+  class          String
+  baseFee        Float    @map("base_fee")
+  lateFeeAmount  Float    @default(100) @map("late_fee_amount")
+  dueDayOfMonth  Int      @map("due_day_of_month")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("fee_structures")
+}
+
+model Ledger {
+  id          String       @id @default(uuid())
+  studentId   String       @map("student_id")
+  month       Int
+  year        Int
+  baseAmount  Float        @map("base_amount")
+  lateFee     Float        @default(0) @map("late_fee")
+  totalAmount Float        @map("total_amount")
+  dueDate     DateTime     @map("due_date")
+  status      LedgerStatus @default(UNPAID)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  student     Student      @relation(fields: [studentId], references: [id])
+  payments    Payment[]
+
+  @@unique([studentId, month, year])
+  @@map("ledgers")
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  ledgerId         String        @map("ledger_id")
+  amountPaid       Float         @map("amount_paid")
+  paymentMethod    PaymentMethod @map("payment_method")
+  source           PaymentSource
+  gatewayPaymentId String?       @unique @map("gateway_payment_id")
+  referenceNumber  String?       @map("reference_number")
+  paymentDate      DateTime      @map("payment_date")
+  status           PaymentStatus
+  createdAt        DateTime      @default(now()) @map("created_at")
+  ledger           Ledger        @relation(fields: [ledgerId], references: [id])
+  receipt          Receipt?
+
+  @@map("payments")
+}
+
+model Receipt {
+  id            String   @id @default(uuid())
+  paymentId     String   @unique @map("payment_id")
+  receiptNumber String   @unique @map("receipt_number")
+  receiptUrl    String   @map("receipt_url")
+  generatedAt   DateTime @default(now()) @map("generated_at")
+  payment       Payment  @relation(fields: [paymentId], references: [id])
+
+  @@map("receipts")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  oldValue   Json?    @map("old_value")
+  newValue   Json?    @map("new_value")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
