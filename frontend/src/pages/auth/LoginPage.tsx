@@ -10,12 +10,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password) return toast.error('Please fill all fields');
+    setError(null);
     setLoading(true);
     try {
       const res = await authService.login(email, password);
@@ -25,6 +27,7 @@ export default function LoginPage() {
       navigate(user.role === 'ADMIN' ? '/admin' : '/parent');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Login failed';
+      setError(msg);
       toast.error(msg);
     } finally {
       setLoading(false);
@@ -112,6 +115,12 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-medium border border-red-100 animate-slide-up">
+                  {error}
+                </div>
+              )}
 
               <button
                 type="submit"

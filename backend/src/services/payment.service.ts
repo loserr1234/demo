@@ -41,7 +41,7 @@ export const createOrderService = async (ledgerId: string, userId: string, userR
   const order = await razorpay.orders.create({
     amount: Math.round(remaining * 100),
     currency: 'INR',
-    receipt: `ledger_${ledgerId}`,
+    receipt: `l_${ledgerId.replace(/-/g, '').slice(0, 38)}`,
     notes: { ledgerId, studentId: ledger.studentId },
   });
 
