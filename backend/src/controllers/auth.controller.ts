@@ -33,7 +33,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     res.cookie('school_token', result.token, {
       httpOnly: true,
       secure: true,
-      sameSite: 'none',
+      sameSite: 'strict',
       maxAge: COOKIE_MAX_AGE,
       path: '/',
     });
@@ -50,7 +50,7 @@ export const logout = (_req: Request, res: Response) => {
   res.clearCookie('school_token', {
     httpOnly: true,
     secure: true,
-    sameSite: 'none',
+    sameSite: 'strict',
     path: '/',
   });
   sendSuccess(res, null, 'Logged out successfully');
