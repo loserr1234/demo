@@ -1,11 +1,14 @@
 import axios from 'axios';
 
-// Backend base URL (without /api)
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+// In production, Vercel proxies /api/* to Railway — use relative path.
+// In dev, proxy isn't available so we hit the backend directly.
+const BASE_URL = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_URL || 'http://localhost:5001') + '/api'
+  : '/api';
 
 // Axios instance — cookies sent automatically via withCredentials
 const apiClient = axios.create({
-  baseURL: `${BASE_URL}/api`,
+  baseURL: BASE_URL,
   timeout: 30000,
   withCredentials: true,
   headers: {
