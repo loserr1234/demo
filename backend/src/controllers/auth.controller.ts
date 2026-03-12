@@ -37,6 +37,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       maxAge: COOKIE_MAX_AGE,
       path: '/',
     });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
     sendSuccess(res, { user: result.user }, 'Login successful');
   } catch (err) {
