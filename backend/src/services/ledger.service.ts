@@ -1,8 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
-import { NotFoundError, BadRequestError } from '../utils/errors';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/errors';
 
-export const getLedgerByIdService = async (id: string) => {
+export const getLedgerByIdService = async (id: string, userId: string, userRole: string) => {
   const ledger = await prisma.ledger.findUnique({
     where: { id },
     include: {
@@ -11,12 +11,18 @@ export const getLedgerByIdService = async (id: string) => {
     },
   });
   if (!ledger) throw new NotFoundError('Ledger not found');
+  if (userRole === 'PARENT' && ledger.student.parentId !== userId) {
+    throw new ForbiddenError('Access denied');
+  }
   return ledger;
 };
 
-export const getStudentLedgersService = async (studentId: string) => {
+export const getStudentLedgersService = async (studentId: string, userId: string, userRole: string) => {
   const student = await prisma.student.findUnique({ where: { id: studentId } });
   if (!student) throw new NotFoundError('Student not found');
+  if (userRole === 'PARENT' && student.parentId !== userId) {
+    throw new ForbiddenError('Access denied');
+  }
 
   const ledgers = await prisma.ledger.findMany({
     where: { studentId },
@@ -27,8 +33,8 @@ export const getStudentLedgersService = async (studentId: string) => {
   });
 
   return ledgers.map((l) => {
-    const totalPaid = l.payments.reduce((sum, p) => sum + p.amountPaid, 0);
-    return { ...l, totalPaid, remaining: l.totalAmount - totalPaid };
+    const totalPaid = l.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
+    return { ...l, totalPaid, remaining: Number(l.totalAmount) - totalPaid };
   });
 };
 
@@ -44,11 +50,11 @@ export const updateLedgerService = async (
   const updateData: Record<string, unknown> = {};
   if (data.baseAmount !== undefined) {
     updateData.baseAmount = data.baseAmount;
-    updateData.totalAmount = data.baseAmount + (data.lateFee ?? ledger.lateFee);
+    updateData.totalAmount = data.baseAmount + (data.lateFee ?? Number(ledger.lateFee));
   }
   if (data.lateFee !== undefined) {
     updateData.lateFee = data.lateFee;
-    updateData.totalAmount = (data.baseAmount ?? ledger.baseAmount) + data.lateFee;
+    updateData.totalAmount = (data.baseAmount ?? Number(ledger.baseAmount)) + data.lateFee;
   }
   if (data.dueDate) updateData.dueDate = new Date(data.dueDate);
   if (data.status) updateData.status = data.status;
@@ -99,8 +105,8 @@ export const getAllLedgersService = async (params: {
   ]);
 
   const enriched = ledgers.map((l) => {
-    const totalPaid = l.payments.reduce((sum, p) => sum + p.amountPaid, 0);
-    return { ...l, totalPaid, remaining: l.totalAmount - totalPaid };
+    const totalPaid = l.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
+    return { ...l, totalPaid, remaining: Number(l.totalAmount) - totalPaid };
   });
 
   return { ledgers: enriched, total, page, limit, totalPages: Math.ceil(total / limit) };

@@ -9,30 +9,25 @@ interface User {
 
 interface AuthState {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User) => void;
   logout: () => void;
 }
 
-// Load from localStorage
+// Load user info from localStorage (token is now in httpOnly cookie)
 const storedUser = localStorage.getItem('school_user');
-const storedToken = localStorage.getItem('school_token');
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: storedUser ? JSON.parse(storedUser) : null,
-  token: storedToken,
-  isAuthenticated: !!storedToken,
+  isAuthenticated: !!storedUser,
 
-  login: (user, token) => {
-    localStorage.setItem('school_token', token);
+  login: (user) => {
     localStorage.setItem('school_user', JSON.stringify(user));
-    set({ user, token, isAuthenticated: true });
+    set({ user, isAuthenticated: true });
   },
 
   logout: () => {
-    localStorage.removeItem('school_token');
     localStorage.removeItem('school_user');
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false });
   },
 }));

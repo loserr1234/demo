@@ -1,130 +1,134 @@
-import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import {
-  Home, Users, LogOut, Menu, X,
-  GraduationCap, ChevronRight, Bell
-} from 'lucide-react';
+import { Home, Users, LogOut, GraduationCap } from 'lucide-react';
 import { useAuthStore } from '../state/authStore';
+import { authService } from '../services/authService';
 import toast from 'react-hot-toast';
 
 const navItems = [
-  { to: '/parent', label: 'Home', icon: Home, end: true },
+  { to: '/parent',          label: 'Home',        icon: Home,  end: true },
   { to: '/parent/children', label: 'My Children', icon: Users },
 ];
 
 export default function ParentLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await authService.logout(); } catch { /* ignore */ }
     logout();
-    toast.success('Logged out successfully');
+    toast.success('Signed out');
     navigate('/login');
   };
 
-  const SidebarContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-          <GraduationCap className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-white font-bold text-lg leading-none">Vidya School</h1>
-          <p className="text-emerald-200 text-xs mt-0.5">Parent Portal</p>
-        </div>
-      </div>
+  return (
+    <div className="parent-root min-h-screen flex flex-col" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      {/* Skip link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-violet-700 focus:text-white focus:rounded-lg focus:text-sm focus:font-semibold"
+      >
+        Skip to main content
+      </a>
 
-      <nav className="flex-1 px-4 py-6 space-y-1">
+      {/* Header */}
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between px-5 py-4"
+        style={{
+          background: 'rgba(247,245,240,0.92)',
+          backdropFilter: 'blur(16px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)' }}
+            aria-hidden="true"
+          >
+            <GraduationCap style={{ width: '1rem', height: '1rem', color: '#fff' }} />
+          </div>
+          <div>
+            <p className="text-sm font-bold leading-none" style={{ color: '#3b0764' }}>Vidya School</p>
+            <p className="text-xs mt-0.5" style={{ color: '#a78bfa' }}>Parent Portal</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-semibold" style={{ color: '#1e1b4b' }}>{user?.name}</p>
+            <p className="text-xs" style={{ color: '#7c3aed' }}>Parent Account</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            style={{ background: '#f5f3ff', color: '#5b21b6' }}
+            aria-label="Sign out of your account"
+          >
+            <LogOut style={{ width: '0.875rem', height: '0.875rem' }} aria-hidden="true" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main */}
+      <main
+        id="main-content"
+        className="flex-1 px-4 pt-6 pb-28 max-w-lg mx-auto w-full"
+        style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
+      >
+        <Outlet />
+      </main>
+
+      {/* Bottom Tab Bar (mobile-first) */}
+      <nav
+        aria-label="Main navigation"
+        className="fixed bottom-0 left-0 right-0 z-30 flex"
+        style={{
+          background: 'rgba(255,255,255,0.96)',
+          backdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(0,0,0,0.07)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
         {navItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
-            onClick={() => setSidebarOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? 'bg-white text-emerald-700 shadow-lg'
-                  : 'text-emerald-100 hover:bg-white/10 hover:text-white'
+              `flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-colors touch-action-manipulation ${
+                isActive ? '' : ''
               }`
             }
+            aria-label={label}
+            style={{ touchAction: 'manipulation' }}
           >
             {({ isActive }) => (
               <>
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-emerald-600' : ''}`} />
-                <span>{label}</span>
-                {isActive && <ChevronRight className="w-4 h-4 ml-auto text-emerald-400" />}
+                <div
+                  className="w-12 h-7 rounded-full flex items-center justify-center transition-colors"
+                  style={{ background: isActive ? '#ede9fe' : 'transparent' }}
+                  aria-hidden="true"
+                >
+                  <Icon
+                    style={{
+                      width: '1.125rem', height: '1.125rem',
+                      color: isActive ? '#5b21b6' : '#94a3b8',
+                    }}
+                    aria-hidden="true"
+                  />
+                </div>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: isActive ? '#5b21b6' : '#94a3b8' }}
+                >
+                  {label}
+                </span>
               </>
             )}
           </NavLink>
         ))}
       </nav>
-
-      <div className="px-4 py-4 border-t border-white/10">
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/10 mb-2">
-          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-            {user?.name.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-medium truncate">{user?.name}</p>
-            <p className="text-emerald-200 text-xs truncate">Parent</p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-2.5 w-full rounded-xl text-sm font-medium text-emerald-100 hover:bg-white/10 hover:text-white transition-all duration-200"
-        >
-          <LogOut className="w-5 h-5" />
-          Sign Out
-        </button>
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <aside className="hidden lg:flex flex-col w-64 min-h-screen fixed left-0 top-0 bottom-0"
-        style={{ background: 'linear-gradient(160deg, #064e3b 0%, #059669 100%)' }}>
-        <SidebarContent />
-      </aside>
-
-      {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative flex flex-col w-72 min-h-screen z-10"
-            style={{ background: 'linear-gradient(160deg, #064e3b 0%, #059669 100%)' }}>
-            <button
-              className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <SidebarContent />
-          </aside>
-        </div>
-      )}
-
-      <main className="flex-1 lg:ml-64 flex flex-col min-h-screen">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-          <button
-            className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="hidden lg:block">
-            <p className="text-sm text-gray-500">Welcome, <span className="font-semibold text-gray-800">{user?.name}</span></p>
-          </div>
-          <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors ml-auto">
-            <Bell className="w-5 h-5" />
-          </button>
-        </header>
-
-        <div className="flex-1 p-6">
-          <Outlet />
-        </div>
-      </main>
     </div>
   );
 }

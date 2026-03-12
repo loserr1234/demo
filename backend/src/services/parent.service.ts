@@ -43,8 +43,8 @@ export const getStudentLedgerForParentService = async (studentId: string, parent
   });
 
   return ledgers.map((l) => {
-    const totalPaid = l.payments.reduce((sum, p) => sum + p.amountPaid, 0);
-    return { ...l, totalPaid, remaining: l.totalAmount - totalPaid };
+    const totalPaid = l.payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
+    return { ...l, totalPaid, remaining: Number(l.totalAmount) - totalPaid };
   });
 };
 

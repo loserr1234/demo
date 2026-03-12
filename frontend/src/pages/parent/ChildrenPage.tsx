@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GraduationCap, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { GraduationCap, AlertCircle, CheckCircle, ChevronRight } from 'lucide-react';
 import { studentService } from '../../services/studentService';
 import { PageLoader } from '../../components/Spinner';
 
@@ -8,7 +8,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 
 export default function ChildrenPage() {
   const [children, setChildren] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     studentService.getChildren()
@@ -20,80 +20,128 @@ export default function ChildrenPage() {
   if (loading) return <PageLoader />;
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">My Children</h1>
-        <p className="text-gray-500 text-sm mt-0.5">{children.length} registered</p>
+        <h1 className="text-2xl font-bold" style={{ color: '#1e1b4b' }}>My Children</h1>
+        <p className="text-sm mt-0.5" style={{ color: '#7c3aed' }}>
+          {children.length} {children.length === 1 ? 'child' : 'children'} registered
+        </p>
       </div>
 
       {children.length === 0 ? (
-        <div className="card text-center py-12 text-gray-400">
-          <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No children registered</p>
+        <div
+          className="rounded-2xl p-12 text-center"
+          style={{ background: '#fff', border: '1px solid #e9d5ff' }}
+        >
+          <GraduationCap
+            style={{ width: '3rem', height: '3rem', color: '#ddd6fe', margin: '0 auto 0.75rem' }}
+            aria-hidden="true"
+          />
+          <p style={{ color: '#8b5cf6' }}>No children registered</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="space-y-4">
           {children.map((child) => {
             const c = child as {
               id: string; name: string; class: string; section: string;
               admissionNumber: string; admissionDate: string;
               ledgers: { id: string; month: number; year: number; totalAmount: number; status: string }[];
             };
-            const pending = c.ledgers?.filter((l) => l.status === 'UNPAID' || l.status === 'PARTIAL');
+            const pending  = c.ledgers?.filter((l) => l.status === 'UNPAID' || l.status === 'PARTIAL') ?? [];
+            const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+
             return (
-              <div key={c.id} className="card">
-                <div className="flex items-center gap-4 mb-5 pb-5 border-b border-gray-100">
-                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
-                    {c.name.charAt(0)}
+              <div
+                key={c.id}
+                className="rounded-2xl overflow-hidden"
+                style={{ background: '#fff', border: '1px solid #e9d5ff', boxShadow: '0 1px 4px rgba(91,33,182,0.06)' }}
+              >
+                {/* Card header */}
+                <div
+                  className="flex items-center gap-4 px-5 py-4"
+                  style={{ background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)' }}
+                >
+                  <div
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-bold flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff' }}
+                    aria-hidden="true"
+                  >
+                    {initials}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{c.name}</h3>
-                    <p className="text-gray-500 text-sm">Class {c.class} - Section {c.section}</p>
-                    <p className="text-xs text-gray-400 font-mono mt-0.5">{c.admissionNumber}</p>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-lg" style={{ color: '#1e1b4b' }}>{c.name}</h3>
+                    <p className="text-sm" style={{ color: '#6d28d9' }}>Class {c.class} – Section {c.section}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>
+                      {c.admissionNumber}
+                    </p>
                   </div>
+                  <span
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
+                    style={{
+                      background: pending.length > 0 ? '#fef2f2' : '#f0fdf4',
+                      color: pending.length > 0 ? '#b91c1c' : '#15803d',
+                    }}
+                  >
+                    {pending.length > 0 ? `${pending.length} due` : 'Paid'}
+                  </span>
                 </div>
 
-                <div className="space-y-3 mb-5">
+                {/* Card body */}
+                <div className="px-5 py-4 space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Admission Date</span>
-                    <span className="font-medium text-gray-700">{new Date(c.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Pending Dues</span>
-                    <span className={`font-semibold ${pending?.length > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                      {pending?.length || 0} months
+                    <span style={{ color: '#6b7280' }}>Admission Date</span>
+                    <span className="font-medium" style={{ color: '#1e1b4b' }}>
+                      {new Date(c.admissionDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
                     </span>
                   </div>
-                </div>
 
-                {pending?.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    {pending.slice(0, 2).map((l) => (
-                      <div key={l.id} className="flex items-center justify-between bg-red-50 rounded-xl p-3">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 text-red-400" />
-                          <span className="text-sm font-medium text-red-700">{MONTHS[l.month - 1]} {l.year}</span>
+                  {pending.length > 0 ? (
+                    <div className="space-y-2">
+                      {pending.slice(0, 2).map((l) => (
+                        <div
+                          key={l.id}
+                          className="flex items-center justify-between rounded-xl px-3 py-2.5"
+                          style={{ background: '#fef2f2', border: '1px solid #fecaca' }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <AlertCircle style={{ width: '1rem', height: '1rem', color: '#ef4444' }} aria-hidden="true" />
+                            <span className="text-sm font-medium" style={{ color: '#dc2626' }}>
+                              {MONTHS[l.month - 1]} {l.year}
+                            </span>
+                          </div>
+                          <span className="font-bold tabular" style={{ color: '#dc2626' }}>
+                            ₹{Number(l.totalAmount).toLocaleString('en-IN')}
+                          </span>
                         </div>
-                        <span className="font-bold text-red-700">₹{l.totalAmount.toLocaleString('en-IN')}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                      {pending.length > 2 && (
+                        <p className="text-xs text-center pt-1" style={{ color: '#9ca3af' }}>
+                          +{pending.length - 2} more pending
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+                      style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                    >
+                      <CheckCircle style={{ width: '1rem', height: '1rem', color: '#16a34a' }} aria-hidden="true" />
+                      <span className="text-sm font-medium" style={{ color: '#15803d' }}>
+                        All fees up to date
+                      </span>
+                    </div>
+                  )}
 
-                {pending?.length === 0 && (
-                  <div className="flex items-center gap-2 bg-emerald-50 rounded-xl p-3 mb-4">
-                    <CheckCircle className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm text-emerald-600 font-medium">All fees up to date</span>
-                  </div>
-                )}
-
-                <Link
-                  to={`/parent/student/${c.id}/ledger`}
-                  className="btn-primary w-full justify-center"
-                  style={{ background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}
-                >
-                  View Fee History <ArrowRight className="w-4 h-4" />
-                </Link>
+                  <Link
+                    to={`/parent/student/${c.id}/ledger`}
+                    className="btn-parent-primary"
+                    style={{ marginTop: '0.25rem' }}
+                  >
+                    View Fee History
+                    <ChevronRight style={{ width: '1.125rem', height: '1.125rem' }} aria-hidden="true" />
+                  </Link>
+                </div>
               </div>
             );
           })}

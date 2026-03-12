@@ -1,31 +1,32 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Backend base URL (without /api)
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
+// Axios instance — cookies sent automatically via withCredentials
 const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: `${BASE_URL}/api`,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Attach token to every request
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('school_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-
-// Handle 401 - redirect to login
+// Handle authentication errors
 apiClient.interceptors.response.use(
-  (res) => res,
+  (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
-      localStorage.removeItem('school_token');
+    const status = error.response?.status;
+
+    if (status === 401 && !error.config?.url?.includes('/auth/login')) {
       localStorage.removeItem('school_user');
+
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
+
     return Promise.reject(error);
   }
 );

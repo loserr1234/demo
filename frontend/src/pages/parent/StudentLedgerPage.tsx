@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, CreditCard, Receipt, CheckCircle,
-  AlertTriangle, ExternalLink, IndianRupee
+  AlertTriangle, ExternalLink, IndianRupee, Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ledgerService } from '../../services/ledgerService';
@@ -12,7 +12,6 @@ import { PageLoader } from '../../components/Spinner';
 import { LedgerBadge } from '../../components/StatusBadge';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const BASE = 'http://localhost:5000';
 
 declare global {
   interface Window {
@@ -21,11 +20,14 @@ declare global {
 }
 
 export default function StudentLedgerPage() {
-  const { id } = useParams<{ id: string }>();
-  const [student, setStudent] = useState<Record<string, unknown> | null>(null);
-  const [ledgers, setLedgers] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [payingId, setPayingId] = useState<string | null>(null);
+  const { id }                          = useParams<{ id: string }>();
+  const [student, setStudent]           = useState<Record<string, unknown> | null>(null);
+  const [ledgers, setLedgers]           = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [payingId, setPayingId]         = useState<string | null>(null);
+  const [pollingId, setPollingId]       = useState<string | null>(null);
+  const pollingRef                      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingTimeoutRef               = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = () => {
     if (!id) return;
@@ -39,24 +41,52 @@ export default function StudentLedgerPage() {
   };
 
   useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => () => { stopPolling(); }, []);
+
+  const stopPolling = () => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    if (pollingTimeoutRef.current) { clearTimeout(pollingTimeoutRef.current); pollingTimeoutRef.current = null; }
+    setPollingId(null);
+  };
+
+  const startPolling = (ledgerId: string, studentId: string) => {
+    setPollingId(ledgerId);
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await ledgerService.getForParentStudent(studentId);
+        const updated = (res.data.data as Array<{ id: string; status: string }>).find((l) => l.id === ledgerId);
+        if (updated?.status === 'PAID') {
+          stopPolling();
+          toast.success('Payment confirmed! Receipt has been generated.');
+          fetchData();
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+
+    pollingTimeoutRef.current = setTimeout(() => {
+      stopPolling();
+      toast('Payment received. Your ledger will update within the hour. Contact admin if it doesn\'t.', {
+        icon: '⏳', duration: 8000,
+      });
+      fetchData();
+    }, 30000);
+  };
 
   const handlePay = async (ledgerId: string) => {
     setPayingId(ledgerId);
     try {
-      // Load Razorpay script if not loaded
       if (!window.Razorpay) {
         await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-          script.onload = () => resolve();
-          script.onerror = reject;
-          document.body.appendChild(script);
+          const s = document.createElement('script');
+          s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          s.onload = () => resolve();
+          s.onerror = reject;
+          document.body.appendChild(s);
         });
       }
-
       const res = await paymentService.createOrder(ledgerId);
       const { orderId, amount, keyId } = res.data.data;
-
+      const studentId = id!;
       const options = {
         key: keyId,
         amount: Math.round(amount * 100),
@@ -64,24 +94,16 @@ export default function StudentLedgerPage() {
         name: 'Vidya School',
         description: 'Fee Payment',
         order_id: orderId,
-        handler: async (_response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
-          toast.success('Payment successful! Receipt will be generated shortly.');
-          setTimeout(() => {
-            fetchData();
-            setPayingId(null);
-          }, 2000);
-        },
+        handler: () => { setPayingId(null); startPolling(ledgerId, studentId); },
         prefill: {
           name: (student as { name: string })?.name || '',
+          contact: (student as { parent?: { phone?: string } })?.parent?.phone || '9999999999',
+          email: '',
         },
-        theme: { color: '#059669' },
-        modal: {
-          ondismiss: () => setPayingId(null),
-        },
+        theme: { color: '#5b21b6' },
+        modal: { ondismiss: () => setPayingId(null) },
       };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      new window.Razorpay(options).open();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Payment initiation failed';
       toast.error(msg);
@@ -93,52 +115,64 @@ export default function StudentLedgerPage() {
 
   const s = student as { name: string; class: string; section: string; admissionNumber: string } | null;
 
+  const totalLedgers  = ledgers.length;
+  const pendingCount  = ledgers.filter((l) => ['UNPAID','PARTIAL'].includes((l as { status: string }).status)).length;
+  const paidCount     = ledgers.filter((l) => (l as { status: string }).status === 'PAID').length;
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link to="/parent/children" className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+      <div className="flex items-center gap-3">
+        <Link
+          to="/parent/children"
+          className="p-2 rounded-xl transition-colors flex-shrink-0"
+          style={{ color: '#7c3aed' }}
+          aria-label="Back to children"
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#f5f3ff')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+        >
+          <ArrowLeft style={{ width: '1.25rem', height: '1.25rem' }} aria-hidden="true" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{s?.name}</h1>
-          <p className="text-gray-500 text-sm">Class {s?.class} - {s?.section} · {s?.admissionNumber}</p>
+          <h1 className="text-xl font-bold" style={{ color: '#1e1b4b' }}>{s?.name}</h1>
+          <p className="text-sm" style={{ color: '#7c3aed' }}>
+            Class {s?.class} – {s?.section} · <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>{s?.admissionNumber}</span>
+          </p>
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Summary chips */}
+      <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Total Ledgers', value: ledgers.length, color: 'text-blue-600', bg: 'bg-blue-50' },
-          {
-            label: 'Pending',
-            value: ledgers.filter((l) => {
-              const ledger = l as { status: string };
-              return ledger.status === 'UNPAID' || ledger.status === 'PARTIAL';
-            }).length,
-            color: 'text-red-600', bg: 'bg-red-50'
-          },
-          {
-            label: 'Paid',
-            value: ledgers.filter((l) => (l as { status: string }).status === 'PAID').length,
-            color: 'text-emerald-600', bg: 'bg-emerald-50'
-          },
-        ].map((s) => (
-          <div key={s.label} className={`${s.bg} rounded-2xl p-4 text-center`}>
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{s.label}</p>
+          { label: 'Total',   value: totalLedgers, bg: '#f5f3ff', color: '#5b21b6' },
+          { label: 'Pending', value: pendingCount,  bg: '#fef2f2', color: '#b91c1c' },
+          { label: 'Paid',    value: paidCount,     bg: '#f0fdf4', color: '#15803d' },
+        ].map((chip) => (
+          <div
+            key={chip.label}
+            className="rounded-2xl p-4 text-center"
+            style={{ background: chip.bg }}
+          >
+            <p className="text-2xl font-bold tabular" style={{ color: chip.color }}>{chip.value}</p>
+            <p className="text-xs mt-1" style={{ color: chip.color, opacity: 0.75 }}>{chip.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Ledger List */}
+      {/* Ledger list */}
       {ledgers.length === 0 ? (
-        <div className="card text-center py-12 text-gray-400">
-          <IndianRupee className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No fee records available</p>
+        <div
+          className="rounded-2xl p-12 text-center"
+          style={{ background: '#fff', border: '1px solid #e9d5ff' }}
+        >
+          <IndianRupee
+            style={{ width: '3rem', height: '3rem', color: '#ddd6fe', margin: '0 auto 0.75rem' }}
+            aria-hidden="true"
+          />
+          <p style={{ color: '#8b5cf6' }}>No fee records available</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {ledgers.map((item) => {
             const l = item as {
               id: string; month: number; year: number;
@@ -152,106 +186,166 @@ export default function StudentLedgerPage() {
             const isPending = l.status === 'UNPAID' || l.status === 'PARTIAL';
             const isOverdue = isPending && new Date() > new Date(l.dueDate);
 
+            let borderColor = '#e9d5ff';
+            if (isPending) borderColor = isOverdue ? '#fecaca' : '#fde68a';
+
             return (
-              <div key={l.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${
-                isPending ? (isOverdue ? 'border-red-200' : 'border-amber-200') : 'border-gray-100'
-              }`} style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.06)' }}>
-                {/* Ledger Header */}
-                <div className={`px-6 py-4 flex items-center justify-between ${
-                  isPending
-                    ? isOverdue
-                      ? 'bg-red-50'
-                      : 'bg-amber-50'
-                    : 'bg-gray-50'
-                }`}>
+              <div
+                key={l.id}
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: '#fff',
+                  border: `1px solid ${borderColor}`,
+                  boxShadow: '0 1px 4px rgba(91,33,182,0.05)',
+                }}
+              >
+                {/* Ledger header */}
+                <div
+                  className="flex items-center justify-between px-5 py-4"
+                  style={{
+                    background: isPending
+                      ? isOverdue ? '#fef2f2' : '#fffbeb'
+                      : '#f9fafb',
+                  }}
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white rounded-xl flex flex-col items-center justify-center shadow-sm">
-                      <span className="text-xs font-bold text-gray-700">{MONTHS[l.month - 1].slice(0, 3)}</span>
-                      <span className="text-xs text-gray-400">{l.year}</span>
+                    <div
+                      className="w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0"
+                      style={{ background: '#fff', border: '1px solid #e5e7eb' }}
+                      aria-hidden="true"
+                    >
+                      <span className="text-xs font-bold" style={{ color: '#374151', lineHeight: 1 }}>
+                        {MONTHS[l.month - 1].slice(0, 3)}
+                      </span>
+                      <span className="text-xs" style={{ color: '#9ca3af', lineHeight: 1.4 }}>{l.year}</span>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{MONTHS[l.month - 1]} {l.year}</h3>
+                      <h3 className="font-semibold" style={{ color: '#1e1b4b' }}>{MONTHS[l.month - 1]} {l.year}</h3>
                       <div className="flex items-center gap-2 mt-0.5">
                         {isOverdue && (
-                          <span className="flex items-center gap-1 text-xs text-red-600">
-                            <AlertTriangle className="w-3 h-3" /> Overdue
+                          <span className="flex items-center gap-1 text-xs font-medium" style={{ color: '#dc2626' }}>
+                            <AlertTriangle style={{ width: '0.75rem', height: '0.75rem' }} aria-hidden="true" />
+                            Overdue
                           </span>
                         )}
-                        <span className="text-xs text-gray-500">Due: {new Date(l.dueDate).toLocaleDateString('en-IN')}</span>
+                        <span className="text-xs" style={{ color: '#9ca3af' }}>
+                          Due {new Date(l.dueDate).toLocaleDateString('en-IN')}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <LedgerBadge status={l.status as 'UNPAID' | 'PARTIAL' | 'PAID' | 'WAIVED'} />
                     {isPending && (
-                      <button
-                        onClick={() => handlePay(l.id)}
-                        disabled={payingId === l.id}
-                        className="btn-primary text-sm"
-                        style={{ background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}
-                      >
-                        {payingId === l.id ? (
-                          <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</>
-                        ) : (
-                          <><CreditCard className="w-4 h-4" /> Pay ₹{l.remaining.toLocaleString('en-IN')}</>
-                        )}
-                      </button>
+                      pollingId === l.id ? (
+                        <div
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm"
+                          style={{ background: '#f5f3ff', color: '#5b21b6', border: '1px solid #ddd6fe' }}
+                        >
+                          <span
+                            className="w-3.5 h-3.5 rounded-full border-2 animate-spin flex-shrink-0"
+                            style={{ borderColor: '#ddd6fe', borderTopColor: '#7c3aed' }}
+                            aria-hidden="true"
+                          />
+                          Processing…
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handlePay(l.id)}
+                          disabled={payingId === l.id || pollingId !== null}
+                          className="btn-parent-primary"
+                          style={{ width: 'auto', padding: '0.625rem 1rem', fontSize: '0.875rem', borderRadius: '0.75rem' }}
+                        >
+                          {payingId === l.id ? (
+                            <>
+                              <span
+                                className="w-4 h-4 rounded-full border-2 animate-spin flex-shrink-0"
+                                style={{ borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }}
+                                aria-hidden="true"
+                              />
+                              Processing…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
+                              Pay ₹{Number(l.remaining).toLocaleString('en-IN')}
+                            </>
+                          )}
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
 
-                {/* Ledger Body */}
-                <div className="px-6 py-4">
-                  <div className="flex gap-6 text-sm mb-4">
+                {/* Ledger body */}
+                <div className="px-5 py-4">
+                  <div className="flex gap-5 text-sm mb-4 flex-wrap">
                     <div>
-                      <span className="text-gray-400">Base Fee</span>
-                      <p className="font-semibold text-gray-800">₹{l.baseAmount.toLocaleString('en-IN')}</p>
+                      <span className="text-xs block" style={{ color: '#9ca3af' }}>Base Fee</span>
+                      <p className="font-semibold tabular" style={{ color: '#1e1b4b' }}>₹{Number(l.baseAmount).toLocaleString('en-IN')}</p>
                     </div>
-                    {l.lateFee > 0 && (
+                    {Number(l.lateFee) > 0 && (
                       <div>
-                        <span className="text-gray-400">Late Fee</span>
-                        <p className="font-semibold text-red-600">₹{l.lateFee}</p>
+                        <span className="text-xs block" style={{ color: '#9ca3af' }}>Late Fee</span>
+                        <p className="font-semibold tabular" style={{ color: '#dc2626' }}>₹{Number(l.lateFee)}</p>
                       </div>
                     )}
                     <div>
-                      <span className="text-gray-400">Total</span>
-                      <p className="font-bold text-gray-900">₹{l.totalAmount.toLocaleString('en-IN')}</p>
+                      <span className="text-xs block" style={{ color: '#9ca3af' }}>Total</span>
+                      <p className="font-bold tabular" style={{ color: '#1e1b4b' }}>₹{Number(l.totalAmount).toLocaleString('en-IN')}</p>
                     </div>
                     <div>
-                      <span className="text-gray-400">Paid</span>
-                      <p className="font-semibold text-emerald-600">₹{l.totalPaid.toLocaleString('en-IN')}</p>
+                      <span className="text-xs block" style={{ color: '#9ca3af' }}>Paid</span>
+                      <p className="font-semibold tabular" style={{ color: '#15803d' }}>₹{Number(l.totalPaid).toLocaleString('en-IN')}</p>
                     </div>
-                    {l.remaining > 0 && (
+                    {Number(l.remaining) > 0 && (
                       <div>
-                        <span className="text-gray-400">Remaining</span>
-                        <p className="font-bold text-red-600">₹{l.remaining.toLocaleString('en-IN')}</p>
+                        <span className="text-xs block" style={{ color: '#9ca3af' }}>Remaining</span>
+                        <p className="font-bold tabular" style={{ color: '#dc2626' }}>₹{Number(l.remaining).toLocaleString('en-IN')}</p>
                       </div>
                     )}
                   </div>
 
-                  {/* Payments */}
                   {l.payments.length > 0 && (
                     <div className="space-y-2">
                       {l.payments.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between bg-emerald-50 rounded-xl px-4 py-3">
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between rounded-xl px-4 py-3"
+                          style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                        >
                           <div className="flex items-center gap-3">
-                            <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            <CheckCircle style={{ width: '1rem', height: '1rem', color: '#16a34a', flexShrink: 0 }} aria-hidden="true" />
                             <div>
-                              <p className="text-sm font-semibold text-emerald-700">₹{p.amountPaid.toLocaleString('en-IN')} paid</p>
-                              <p className="text-xs text-emerald-600">{p.paymentMethod} · {new Date(p.paymentDate).toLocaleDateString('en-IN')}</p>
+                              <p className="text-sm font-semibold tabular" style={{ color: '#15803d' }}>
+                                ₹{Number(p.amountPaid).toLocaleString('en-IN')} paid
+                              </p>
+                              <p className="text-xs" style={{ color: '#16a34a' }}>
+                                {p.paymentMethod} · {new Date(p.paymentDate).toLocaleDateString('en-IN')}
+                              </p>
                             </div>
                           </div>
                           {p.receipt && (
-                            <div className="flex gap-2">
-                              <a href={`${BASE}${p.receipt.receiptUrl}`} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium">
-                                <Receipt className="w-3 h-3" /> {p.receipt.receiptNumber}
-                                <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
+                            <button
+                              onClick={() => paymentService.openReceipt(p.id)}
+                              className="inline-flex items-center gap-1 text-xs font-medium"
+                              style={{ color: '#5b21b6' }}
+                              aria-label={`View receipt ${p.receipt.receiptNumber}`}
+                            >
+                              <Receipt style={{ width: '0.75rem', height: '0.75rem' }} aria-hidden="true" />
+                              {p.receipt.receiptNumber}
+                              <ExternalLink style={{ width: '0.75rem', height: '0.75rem' }} aria-hidden="true" />
+                            </button>
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {l.payments.length === 0 && !isPending && (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: '#9ca3af' }}>
+                      <Clock style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
+                      No payment records
                     </div>
                   )}
                 </div>

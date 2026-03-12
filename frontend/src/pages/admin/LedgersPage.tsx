@@ -16,19 +16,27 @@ interface Ledger {
   student: { name: string; admissionNumber: string; class: string; section: string };
 }
 
+const STATUS_FILTERS = [
+  { value: '',        label: 'All' },
+  { value: 'UNPAID',  label: 'Unpaid' },
+  { value: 'PARTIAL', label: 'Partial' },
+  { value: 'PAID',    label: 'Paid' },
+  { value: 'WAIVED',  label: 'Waived' },
+];
+
 export default function LedgersPage() {
   const [searchParams] = useSearchParams();
-  const [ledgers, setLedgers] = useState<Ledger[]>([]);
-  const [total, setTotal] = useState(0);
+  const [ledgers, setLedgers]       = useState<Ledger[]>([]);
+  const [total, setTotal]           = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage]             = useState(1);
+  const [loading, setLoading]       = useState(true);
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
-  const [editLedger, setEditLedger] = useState<Ledger | null>(null);
-  const [editForm, setEditForm] = useState({ baseAmount: '', lateFee: '', status: '' });
-  const [submitting, setSubmitting] = useState(false);
+  const [editLedger, setEditLedger]     = useState<Ledger | null>(null);
+  const [editForm, setEditForm]         = useState({ baseAmount: '', lateFee: '', status: '' });
+  const [submitting, setSubmitting]     = useState(false);
 
-  const fetch = async () => {
+  const fetchLedgers = async () => {
     setLoading(true);
     try {
       const res = await ledgerService.getAll({ page, limit: 10, status: statusFilter || undefined });
@@ -40,7 +48,7 @@ export default function LedgersPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, [page, statusFilter]);
+  useEffect(() => { fetchLedgers(); }, [page, statusFilter]);
 
   const openEdit = (l: Ledger) => {
     if (l.status === 'PAID') { toast.error('Cannot edit a paid ledger'); return; }
@@ -60,7 +68,7 @@ export default function LedgersPage() {
       });
       toast.success('Ledger updated!');
       setEditLedger(null);
-      fetch();
+      fetchLedgers();
     } catch { toast.error('Update failed'); }
     finally { setSubmitting(false); }
   };
@@ -69,34 +77,35 @@ export default function LedgersPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fee Ledgers</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{total} total entries</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#0f172a' }}>Fee Ledgers</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#64748b' }}>{total} total entries</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4">
-        <div className="flex gap-3 flex-wrap">
-          {['', 'UNPAID', 'PARTIAL', 'PAID', 'WAIVED'].map((s) => (
+      {/* Status filter pills */}
+      <div className="card" style={{ padding: '1rem' }}>
+        <div className="flex gap-2 flex-wrap" role="group" aria-label="Filter by status">
+          {STATUS_FILTERS.map((f) => (
             <button
-              key={s}
-              onClick={() => { setStatusFilter(s); setPage(1); }}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                statusFilter === s
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              key={f.value}
+              onClick={() => { setStatusFilter(f.value); setPage(1); }}
+              aria-pressed={statusFilter === f.value}
+              className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+              style={{
+                background: statusFilter === f.value ? '#2563eb' : '#f1f5f9',
+                color: statusFilter === f.value ? '#fff' : '#475569',
+              }}
             >
-              {s || 'All'}
+              {f.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.08)' }}>
+      <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: '#e8edf2', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
         {loading ? <PageLoader /> : ledgers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <FileText className="w-12 h-12 mb-3 opacity-30" />
+          <div className="flex flex-col items-center justify-center py-16" style={{ color: '#94a3b8' }}>
+            <FileText style={{ width: '3rem', height: '3rem', opacity: 0.3, marginBottom: '0.75rem' }} aria-hidden="true" />
             <p className="font-medium">No ledgers found</p>
           </div>
         ) : (
@@ -104,7 +113,7 @@ export default function LedgersPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr>
                     <th className="table-th">Student</th>
                     <th className="table-th">Period</th>
                     <th className="table-th">Base Fee</th>
@@ -121,30 +130,51 @@ export default function LedgersPage() {
                   {ledgers.map((l) => (
                     <tr key={l.id} className="table-row">
                       <td className="table-td">
-                        <p className="font-semibold text-gray-900">{l.student?.name}</p>
-                        <p className="text-xs text-gray-400">Class {l.student?.class}-{l.student?.section}</p>
+                        <p className="font-semibold" style={{ color: '#0f172a' }}>{l.student?.name}</p>
+                        <p className="text-xs" style={{ color: '#94a3b8' }}>Class {l.student?.class}–{l.student?.section}</p>
                       </td>
-                      <td className="table-td font-medium">{MONTHS[l.month-1].slice(0,3)} {l.year}</td>
-                      <td className="table-td">₹{l.baseAmount.toLocaleString('en-IN')}</td>
-                      <td className="table-td">
-                        {l.lateFee > 0 ? <span className="text-red-500 font-medium">₹{l.lateFee}</span> : <span className="text-gray-300">—</span>}
+                      <td className="table-td font-medium" style={{ color: '#334155' }}>
+                        {MONTHS[l.month - 1].slice(0, 3)} {l.year}
                       </td>
-                      <td className="table-td font-semibold">₹{l.totalAmount.toLocaleString('en-IN')}</td>
-                      <td className="table-td text-emerald-600 font-medium">₹{l.totalPaid.toLocaleString('en-IN')}</td>
-                      <td className="table-td">
-                        {l.remaining > 0
-                          ? <span className="text-red-500 font-medium">₹{l.remaining.toLocaleString('en-IN')}</span>
-                          : <span className="text-emerald-500">—</span>}
+                      <td className="table-td tabular" style={{ color: '#374151' }}>₹{Number(l.baseAmount).toLocaleString('en-IN')}</td>
+                      <td className="table-td tabular">
+                        {Number(l.lateFee) > 0
+                          ? <span style={{ color: '#ef4444', fontWeight: 500 }}>₹{Number(l.lateFee)}</span>
+                          : <span style={{ color: '#cbd5e1' }}>—</span>}
                       </td>
-                      <td className="table-td text-xs">{new Date(l.dueDate).toLocaleDateString('en-IN')}</td>
+                      <td className="table-td font-semibold tabular" style={{ color: '#0f172a' }}>₹{Number(l.totalAmount).toLocaleString('en-IN')}</td>
+                      <td className="table-td tabular" style={{ color: '#16a34a', fontWeight: 500 }}>₹{Number(l.totalPaid).toLocaleString('en-IN')}</td>
+                      <td className="table-td tabular">
+                        {Number(l.remaining) > 0
+                          ? <span style={{ color: '#ef4444', fontWeight: 500 }}>₹{Number(l.remaining).toLocaleString('en-IN')}</span>
+                          : <span style={{ color: '#86efac' }}>—</span>}
+                      </td>
+                      <td className="table-td text-xs" style={{ color: '#64748b' }}>
+                        {new Date(l.dueDate).toLocaleDateString('en-IN')}
+                      </td>
                       <td className="table-td"><LedgerBadge status={l.status as 'UNPAID' | 'PARTIAL' | 'PAID' | 'WAIVED'} /></td>
                       <td className="table-td">
-                        <div className="flex items-center gap-2">
-                          <Link to={`/admin/ledger/${l.id}`} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">
-                            <Eye className="w-4 h-4" />
+                        <div className="flex items-center gap-1">
+                          <Link
+                            to={`/admin/ledger/${l.id}`}
+                            className="p-2 rounded-lg transition-colors"
+                            style={{ color: '#3b82f6' }}
+                            aria-label="View ledger details"
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#eff6ff')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                          >
+                            <Eye style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
                           </Link>
-                          <button onClick={() => openEdit(l)} disabled={l.status === 'PAID'} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30">
-                            <Edit2 className="w-4 h-4" />
+                          <button
+                            onClick={() => openEdit(l)}
+                            disabled={l.status === 'PAID'}
+                            className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                            style={{ color: '#64748b' }}
+                            aria-label="Edit ledger"
+                            onMouseEnter={(e) => !l.status.includes('PAID') && (e.currentTarget.style.background = '#f1f5f9')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                          >
+                            <Edit2 style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
                           </button>
                         </div>
                       </td>
@@ -162,28 +192,28 @@ export default function LedgersPage() {
       <Modal isOpen={!!editLedger} onClose={() => setEditLedger(null)} title="Edit Ledger">
         <form onSubmit={handleUpdate} className="space-y-4">
           <div>
-            <label className="label">Base Amount (₹)</label>
-            <input type="number" className="input" value={editForm.baseAmount} onChange={(e) => setEditForm({ ...editForm, baseAmount: e.target.value })} />
+            <label className="label" htmlFor="edit-base">Base Amount (₹)</label>
+            <input id="edit-base" type="number" className="input" value={editForm.baseAmount} onChange={(e) => setEditForm({ ...editForm, baseAmount: e.target.value })} />
           </div>
           <div>
-            <label className="label">Late Fee (₹)</label>
-            <input type="number" className="input" value={editForm.lateFee} onChange={(e) => setEditForm({ ...editForm, lateFee: e.target.value })} />
+            <label className="label" htmlFor="edit-late">Late Fee (₹)</label>
+            <input id="edit-late" type="number" className="input" value={editForm.lateFee} onChange={(e) => setEditForm({ ...editForm, lateFee: e.target.value })} />
           </div>
           <div>
-            <label className="label">Status</label>
+            <label className="label" htmlFor="edit-status">Status</label>
             <div className="relative">
-              <select className="select pr-8" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
-                <option value="UNPAID">UNPAID</option>
-                <option value="PARTIAL">PARTIAL</option>
-                <option value="WAIVED">WAIVED</option>
+              <select id="edit-status" className="select pr-8" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                <option value="UNPAID">Unpaid</option>
+                <option value="PARTIAL">Partial</option>
+                <option value="WAIVED">Waived</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ width: '1rem', height: '1rem', color: '#94a3b8' }} aria-hidden="true" />
             </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => setEditLedger(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
             <button type="submit" disabled={submitting} className="btn-primary flex-1 justify-center">
-              {submitting ? 'Saving...' : 'Update Ledger'}
+              {submitting ? 'Saving…' : 'Update Ledger'}
             </button>
           </div>
         </form>

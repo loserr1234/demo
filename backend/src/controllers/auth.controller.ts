@@ -14,11 +14,31 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
     const result = await loginService(email, password);
-    sendSuccess(res, result, 'Login successful');
+
+    if ('mustChangePassword' in result && result.mustChangePassword) {
+      return sendSuccess(res, {
+        mustChangePassword: true,
+        user: result.user,
+      }, 'Password change required');
+    }
+
+    // Set JWT as httpOnly cookie
+    res.cookie('school_token', result.token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: COOKIE_MAX_AGE,
+      path: '/',
+    });
+
+    sendSuccess(res, { user: result.user }, 'Login successful');
   } catch (err) {
     if (err instanceof z.ZodError) return next(new BadRequestError(err.errors[0].message));
     next(err);
@@ -26,6 +46,12 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const logout = (_req: Request, res: Response) => {
+  res.clearCookie('school_token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/',
+  });
   sendSuccess(res, null, 'Logged out successfully');
 };
 

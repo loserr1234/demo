@@ -10,6 +10,13 @@ export const loginService = async (email: string, password: string) => {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) throw new UnauthorizedError('incorrect password try again');
 
+  if (user.mustChangePassword) {
+    return {
+      mustChangePassword: true,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    };
+  }
+
   const token = signToken({ userId: user.id, role: user.role, email: user.email });
   return {
     token,
@@ -31,5 +38,8 @@ export const changePasswordService = async (
   if (newPassword.length < 6) throw new BadRequestError('Password must be at least 6 characters');
 
   const hash = await bcrypt.hash(newPassword, 12);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: hash, mustChangePassword: false },
+  });
 };

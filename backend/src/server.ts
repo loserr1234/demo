@@ -3,10 +3,12 @@ import express, { type Request } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 
+import prisma from './config/prisma';
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes';
 import parentRoutes from './routes/parent.routes';
@@ -15,9 +17,11 @@ import paymentRoutes from './routes/payment.routes';
 import { razorpayWebhook } from './webhooks/razorpay.webhook';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { startMonthlyLedgerJob, startLateFeeJob } from './jobs/ledger.job';
+import { startReconciliationJob } from './jobs/reconciliation.job';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 // Ensure receipts directory exists
 const receiptsDir = process.env.RECEIPTS_DIR || './receipts';
@@ -41,7 +45,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Webhook route — raw body must be preserved for HMAC verification before JSON parsing
-app.post('/webhooks/razorpay', express.raw({ type: 'application/json' }), (req, res, next) => {
+app.post('/api/webhooks/razorpay', express.raw({ type: 'application/json' }), (req, res, next) => {
   (req as Request & { rawBody: string }).rawBody = req.body.toString();
   req.body = JSON.parse((req as Request & { rawBody: string }).rawBody);
   next();
@@ -49,10 +53,10 @@ app.post('/webhooks/razorpay', express.raw({ type: 'application/json' }), (req, 
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(morgan('dev'));
 
-// Static receipts
-app.use('/receipts', express.static(path.resolve(receiptsDir)));
+// Receipts served via authenticated API endpoint — see payment.routes.ts
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -72,13 +76,20 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`\n🚀 School Management Server running on port ${PORT}`);
+  console.log(`🚀 School Management Server running on port ${PORT}`);
   console.log(`📚 Environment: ${process.env.NODE_ENV}`);
+  console.log(`🔗 Backend URL: ${BACKEND_URL}`);
   console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}\n`);
+
+  // Keepalive ping — prevents Neon serverless DB from suspending the connection
+  setInterval(async () => {
+    await prisma.$queryRaw`SELECT 1`.catch(() => { });
+  }, 4 * 60 * 1000); // every 4 minutes
 
   // Start cron jobs
   startMonthlyLedgerJob();
   startLateFeeJob();
+  startReconciliationJob();
 });
 
 export default app;

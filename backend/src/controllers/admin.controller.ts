@@ -8,6 +8,8 @@ import {
   updateStudentService,
   updateStudentStatusService,
   getAuditLogsService,
+  getAlertsService,
+  resolveAlertService,
 } from '../services/admin.service';
 import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
@@ -103,6 +105,25 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
     const limit = parseInt(req.query.limit as string) || 20;
     const result = await getAuditLogsService(page, limit);
     sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const resolved = req.query.resolved === 'true';
+    const alerts = await getAlertsService(resolved);
+    sendSuccess(res, alerts);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveAlert = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const alert = await resolveAlertService(req.params.id as string);
+    sendSuccess(res, alert, 'Alert resolved');
   } catch (err) {
     next(err);
   }

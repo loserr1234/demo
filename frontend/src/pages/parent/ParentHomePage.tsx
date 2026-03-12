@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CheckCircle, ArrowRight, GraduationCap } from 'lucide-react';
+import { AlertCircle, CheckCircle, ArrowRight, GraduationCap, ChevronRight } from 'lucide-react';
 import { studentService } from '../../services/studentService';
 import { PageLoader } from '../../components/Spinner';
 import { useAuthStore } from '../../state/authStore';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
 export default function ParentHomePage() {
   const [children, setChildren] = useState<Record<string, unknown>[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuthStore();
+  const [loading, setLoading]   = useState(true);
+  const { user }                = useAuthStore();
 
   useEffect(() => {
     studentService.getChildren()
@@ -26,52 +33,99 @@ export default function ParentHomePage() {
     return ledgers.some((l) => l.status === 'UNPAID' || l.status === 'PARTIAL');
   }).length;
 
+  const firstName = user?.name?.split(' ')[0] ?? 'there';
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Welcome Banner */}
-      <div className="rounded-3xl p-8 text-white" style={{ background: 'linear-gradient(135deg, #064e3b 0%, #059669 100%)' }}>
-        <div className="flex items-start justify-between">
+    <div className="space-y-6 animate-fade-in">
+      {/* Welcome card */}
+      <div
+        className="rounded-2xl p-6"
+        style={{ background: 'linear-gradient(135deg, #4c1d95 0%, #6d28d9 60%, #7c3aed 100%)' }}
+      >
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Good {getTimeOfDay()}, {user?.name?.split(' ')[0]}!</h1>
-            <p className="text-emerald-100">Manage your children's fee payments with ease.</p>
-            <div className="flex gap-6 mt-5">
-              <div>
-                <p className="text-3xl font-bold">{children.length}</p>
-                <p className="text-emerald-200 text-sm">Children</p>
-              </div>
-              <div>
-                <p className="text-3xl font-bold">{pendingCount}</p>
-                <p className="text-emerald-200 text-sm">Pending Dues</p>
-              </div>
-            </div>
+            <p className="text-sm font-medium" style={{ color: '#c4b5fd' }}>{getGreeting()}</p>
+            <h1 className="text-xl font-bold mt-0.5" style={{ color: '#fff' }}>{firstName}!</h1>
+            <p className="text-sm mt-1" style={{ color: '#a78bfa' }}>
+              Vidya School · Parent Portal
+            </p>
           </div>
-          <GraduationCap className="w-24 h-24 text-white/10" />
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.12)' }}
+            aria-hidden="true"
+          >
+            <GraduationCap style={{ width: '1.5rem', height: '1.5rem', color: '#fff' }} />
+          </div>
+        </div>
+
+        <div className="flex gap-6 mt-5 pt-5" style={{ borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+          <div>
+            <p className="text-2xl font-bold tabular" style={{ color: '#fff' }}>{children.length}</p>
+            <p className="text-xs mt-0.5" style={{ color: '#a78bfa' }}>Children</p>
+          </div>
+          <div>
+            <p
+              className="text-2xl font-bold tabular"
+              style={{ color: pendingCount > 0 ? '#fca5a5' : '#86efac' }}
+            >
+              {pendingCount}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: '#a78bfa' }}>Pending Dues</p>
+          </div>
         </div>
       </div>
 
-      {/* Alerts */}
+      {/* Pending dues alert */}
       {pendingCount > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-          <p className="text-sm text-amber-700">
-            You have <strong>{pendingCount}</strong> {pendingCount === 1 ? 'child' : 'children'} with pending fee payments.
+        <div
+          className="flex items-center gap-3 rounded-xl p-4"
+          role="alert"
+          style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+        >
+          <AlertCircle
+            style={{ width: '1.25rem', height: '1.25rem', color: '#ea580c', flexShrink: 0 }}
+            aria-hidden="true"
+          />
+          <p className="text-sm flex-1" style={{ color: '#9a3412' }}>
+            <strong>{pendingCount}</strong> {pendingCount === 1 ? 'child has' : 'children have'} pending fee payments.
           </p>
-          <Link to="/parent/children" className="ml-auto text-sm font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-1 whitespace-nowrap">
-            Pay now <ArrowRight className="w-4 h-4" />
+          <Link
+            to="/parent/children"
+            className="text-sm font-semibold flex items-center gap-1 whitespace-nowrap"
+            style={{ color: '#ea580c' }}
+          >
+            Pay now <ArrowRight style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
           </Link>
         </div>
       )}
 
-      {/* Children Cards */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Children</h2>
+      {/* Children list */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold" style={{ color: '#1e1b4b' }}>Your Children</h2>
+          <Link
+            to="/parent/children"
+            className="text-sm font-semibold flex items-center gap-0.5"
+            style={{ color: '#7c3aed' }}
+          >
+            See all <ChevronRight style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
+          </Link>
+        </div>
+
         {children.length === 0 ? (
-          <div className="card text-center py-12 text-gray-400">
-            <GraduationCap className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>No children registered</p>
+          <div
+            className="rounded-2xl p-10 text-center"
+            style={{ background: '#fff', border: '1px solid #e9d5ff' }}
+          >
+            <GraduationCap
+              style={{ width: '2.5rem', height: '2.5rem', color: '#ddd6fe', margin: '0 auto 0.75rem' }}
+              aria-hidden="true"
+            />
+            <p className="text-sm" style={{ color: '#8b5cf6' }}>No children registered yet</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="space-y-3">
             {children.map((child) => {
               const c = child as {
                 id: string; name: string; class: string; section: string;
@@ -79,60 +133,73 @@ export default function ParentHomePage() {
                 ledgers: { id: string; month: number; year: number; totalAmount: number; status: string }[];
               };
               const pendingLedger = c.ledgers?.find((l) => l.status === 'UNPAID' || l.status === 'PARTIAL');
+              const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+
               return (
                 <Link
                   key={c.id}
                   to={`/parent/student/${c.id}/ledger`}
-                  className="card-hover group"
+                  className="flex items-center gap-4 rounded-2xl p-4 transition-all"
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #e9d5ff',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                  }}
+                  aria-label={`View fee ledger for ${c.name}`}
                 >
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-                      {c.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">{c.name}</h3>
-                      <p className="text-sm text-gray-500">Class {c.class} - {c.section}</p>
-                      <p className="text-xs text-gray-400 font-mono">{c.admissionNumber}</p>
-                    </div>
+                  {/* Avatar */}
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', color: '#fff' }}
+                    aria-hidden="true"
+                  >
+                    {initials}
                   </div>
-                  {pendingLedger ? (
-                    <div className="flex items-center justify-between bg-red-50 rounded-xl p-3">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-500" />
-                        <div>
-                          <p className="text-xs font-semibold text-red-600">
-                            {MONTHS[pendingLedger.month - 1]} due
-                          </p>
-                          <p className="text-sm font-bold text-red-700">₹{pendingLedger.totalAmount.toLocaleString('en-IN')}</p>
-                        </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold" style={{ color: '#1e1b4b' }}>{c.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#7c3aed' }}>
+                      Class {c.class} – {c.section}
+                    </p>
+                  </div>
+
+                  {/* Status pill */}
+                  <div className="flex-shrink-0 text-right">
+                    {pendingLedger ? (
+                      <div>
+                        <span
+                          className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full"
+                          style={{ background: '#fef2f2', color: '#b91c1c' }}
+                        >
+                          Due {MONTHS[pendingLedger.month - 1]}
+                        </span>
+                        <p className="text-sm font-bold mt-0.5 tabular" style={{ color: '#dc2626' }}>
+                          ₹{Number(pendingLedger.totalAmount).toLocaleString('en-IN')}
+                        </p>
                       </div>
-                      <span className="text-xs bg-red-100 text-red-600 px-2.5 py-1 rounded-lg font-semibold">
-                        {pendingLedger.status}
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 text-xs font-medium"
+                        style={{ color: '#16a34a' }}
+                      >
+                        <CheckCircle style={{ width: '0.875rem', height: '0.875rem' }} aria-hidden="true" />
+                        Paid
                       </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 bg-emerald-50 rounded-xl p-3">
-                      <CheckCircle className="w-4 h-4 text-emerald-500" />
-                      <p className="text-sm text-emerald-600 font-medium">All fees paid</p>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-xs text-gray-400">View fee history</span>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+                    )}
                   </div>
+
+                  <ChevronRight
+                    style={{ width: '1rem', height: '1rem', color: '#c4b5fd', flexShrink: 0 }}
+                    aria-hidden="true"
+                  />
                 </Link>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
-}
-
-function getTimeOfDay() {
-  const h = new Date().getHours();
-  if (h < 12) return 'morning';
-  if (h < 18) return 'afternoon';
-  return 'evening';
 }

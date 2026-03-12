@@ -14,4 +14,27 @@ export const paymentService = {
 
   getReceipt: (paymentId: string) =>
     apiClient.get(`/parent/receipt/${paymentId}`),
+
+  openReceipt: async (paymentId: string) => {
+    const res = await apiClient.get(`/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
+
+  downloadReceipt: async (paymentId: string, filename: string) => {
+    const res = await apiClient.get(`/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
 };

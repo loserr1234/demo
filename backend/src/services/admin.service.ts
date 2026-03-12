@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
@@ -36,8 +37,8 @@ export const getStatsService = async () => {
     activeStudents,
     totalParents,
     unpaidLedgers,
-    revenueThisMonth: paidThisMonth._sum.amountPaid || 0,
-    totalRevenue: totalRevenue._sum.amountPaid || 0,
+    revenueThisMonth: Number(paidThisMonth._sum.amountPaid || 0),
+    totalRevenue: Number(totalRevenue._sum.amountPaid || 0),
   };
 };
 
@@ -54,11 +55,13 @@ export const createStudentService = async (data: {
   const existing = await prisma.user.findUnique({ where: { email: data.parentEmail } });
 
   let parent;
+  let tempPassword: string | undefined;
   if (existing) {
     if (existing.role !== 'PARENT') throw new ConflictError('Email belongs to non-parent user');
     parent = existing;
   } else {
-    const hash = await bcrypt.hash('parent@123', 12);
+    tempPassword = crypto.randomBytes(12).toString('base64url');
+    const hash = await bcrypt.hash(tempPassword, 12);
     parent = await prisma.user.create({
       data: {
         name: data.parentName,
@@ -66,6 +69,7 @@ export const createStudentService = async (data: {
         passwordHash: hash,
         role: 'PARENT',
         phone: data.parentPhone,
+        mustChangePassword: true,
       },
     });
   }
@@ -83,7 +87,11 @@ export const createStudentService = async (data: {
     include: { parent: { select: { id: true, name: true, email: true, phone: true } } },
   });
 
-  return student;
+  return {
+    ...student,
+    // Only present when a new parent account was created with a random temp password
+    ...(tempPassword ? { tempPassword } : {}),
+  };
 };
 
 export const getStudentsService = async (params: {
@@ -207,4 +215,18 @@ export const getAuditLogsService = async (page: number, limit: number) => {
     prisma.auditLog.count(),
   ]);
   return { logs, total, page, limit, totalPages: Math.ceil(total / limit) };
+};
+
+export const getAlertsService = async (resolved: boolean) => {
+  return prisma.alert.findMany({
+    where: { resolved },
+    orderBy: { createdAt: 'desc' },
+  });
+};
+
+export const resolveAlertService = async (id: string) => {
+  return prisma.alert.update({
+    where: { id },
+    data: { resolved: true },
+  });
 };

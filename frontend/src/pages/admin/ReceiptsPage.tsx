@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Receipt, Download, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/apiClient';
+import { paymentService } from '../../services/paymentService';
 import { PageLoader } from '../../components/Spinner';
 import Pagination from '../../components/Pagination';
 
@@ -10,6 +11,7 @@ interface ReceiptItem {
   receiptNumber: string;
   receiptUrl: string;
   generatedAt: string;
+  paymentId: string;
   payment: {
     amountPaid: number;
     paymentMethod: string;
@@ -23,14 +25,13 @@ interface ReceiptItem {
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const BASE = 'http://localhost:5000';
 
 export default function ReceiptsPage() {
-  const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
-  const [total, setTotal] = useState(0);
+  const [receipts, setReceipts]     = useState<ReceiptItem[]>([]);
+  const [total, setTotal]           = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [page, setPage]             = useState(1);
+  const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
     setLoading(true);
@@ -38,17 +39,19 @@ export default function ReceiptsPage() {
       .then((r) => {
         const payments = r.data.data.payments.filter((p: { receipt?: unknown }) => p.receipt);
         setReceipts(payments.map((p: {
-          id: string; receipt: { id: string; receiptNumber: string; receiptUrl: string; generatedAt: string };
+          id: string;
+          receipt: { id: string; receiptNumber: string; receiptUrl: string; generatedAt: string };
           amountPaid: number; paymentMethod: string; paymentDate: string;
           ledger: { month: number; year: number; student: { name: string; admissionNumber: string } };
         }) => ({
           ...p.receipt,
+          paymentId: p.id,
           payment: {
             amountPaid: p.amountPaid,
             paymentMethod: p.paymentMethod,
             paymentDate: p.paymentDate,
             ledger: p.ledger,
-          }
+          },
         })));
         setTotal(r.data.data.total);
         setTotalPages(r.data.data.totalPages);
@@ -60,14 +63,14 @@ export default function ReceiptsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
-        <p className="text-gray-500 text-sm mt-0.5">All generated payment receipts</p>
+        <h1 className="text-2xl font-bold" style={{ color: '#0f172a' }}>Receipts</h1>
+        <p className="text-sm mt-0.5" style={{ color: '#64748b' }}>All generated payment receipts</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden" style={{ boxShadow: '0 1px 3px 0 rgba(0,0,0,0.08)' }}>
+      <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: '#e8edf2', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
         {loading ? <PageLoader /> : receipts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-            <Receipt className="w-12 h-12 mb-3 opacity-30" />
+          <div className="flex flex-col items-center justify-center py-16" style={{ color: '#94a3b8' }}>
+            <Receipt style={{ width: '3rem', height: '3rem', opacity: 0.3, marginBottom: '0.75rem' }} aria-hidden="true" />
             <p className="font-medium">No receipts found</p>
           </div>
         ) : (
@@ -75,38 +78,60 @@ export default function ReceiptsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr>
                     <th className="table-th">Receipt No.</th>
                     <th className="table-th">Student</th>
                     <th className="table-th">Period</th>
                     <th className="table-th">Amount</th>
                     <th className="table-th">Method</th>
                     <th className="table-th">Generated</th>
-                    <th className="table-th">Download</th>
+                    <th className="table-th">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {receipts.map((r) => (
                     <tr key={r.id} className="table-row">
-                      <td className="table-td font-mono text-sm text-blue-600 font-semibold">{r.receiptNumber}</td>
-                      <td className="table-td">
-                        <p className="font-semibold text-gray-900">{r.payment?.ledger?.student?.name}</p>
-                        <p className="text-xs text-gray-400">{r.payment?.ledger?.student?.admissionNumber}</p>
+                      <td className="table-td font-semibold" style={{ fontFamily: 'var(--font-mono)', color: '#2563eb', fontSize: '0.8125rem' }}>
+                        {r.receiptNumber}
                       </td>
-                      <td className="table-td">{MONTHS[(r.payment?.ledger?.month || 1) - 1]} {r.payment?.ledger?.year}</td>
-                      <td className="table-td font-bold text-gray-900">₹{r.payment?.amountPaid.toLocaleString('en-IN')}</td>
-                      <td className="table-td text-sm text-gray-600">{r.payment?.paymentMethod}</td>
-                      <td className="table-td text-xs">{new Date(r.generatedAt).toLocaleDateString('en-IN')}</td>
                       <td className="table-td">
-                        <div className="flex gap-2">
-                          <a href={`${BASE}${r.receiptUrl}`} target="_blank" rel="noopener noreferrer"
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Open">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                          <a href={`${BASE}${r.receiptUrl}`} download
-                            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors" title="Download">
-                            <Download className="w-4 h-4" />
-                          </a>
+                        <p className="font-semibold" style={{ color: '#0f172a' }}>{r.payment?.ledger?.student?.name}</p>
+                        <p className="text-xs" style={{ color: '#94a3b8' }}>{r.payment?.ledger?.student?.admissionNumber}</p>
+                      </td>
+                      <td className="table-td" style={{ color: '#334155' }}>
+                        {MONTHS[(r.payment?.ledger?.month || 1) - 1]} {r.payment?.ledger?.year}
+                      </td>
+                      <td className="table-td font-bold tabular" style={{ color: '#0f172a' }}>
+                        ₹{Number(r.payment?.amountPaid).toLocaleString('en-IN')}
+                      </td>
+                      <td className="table-td text-sm" style={{ color: '#475569' }}>{r.payment?.paymentMethod}</td>
+                      <td className="table-td text-xs" style={{ color: '#64748b' }}>
+                        {new Date(r.generatedAt).toLocaleDateString('en-IN')}
+                      </td>
+                      <td className="table-td">
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => paymentService.openReceipt(r.paymentId).catch(() => toast.error('Failed to open'))}
+                            className="p-2 rounded-lg transition-colors"
+                            style={{ color: '#3b82f6' }}
+                            title="Open receipt"
+                            aria-label={`Open receipt ${r.receiptNumber}`}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#eff6ff')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                          >
+                            <ExternalLink style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
+                          </button>
+                          <button
+                            onClick={() => paymentService.downloadReceipt(r.paymentId, `${r.receiptNumber}.pdf`).catch(() => toast.error('Failed to download'))}
+                            className="p-2 rounded-lg transition-colors"
+                            style={{ color: '#16a34a' }}
+                            title="Download receipt"
+                            aria-label={`Download receipt ${r.receiptNumber}`}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = '#f0fdf4')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                          >
+                            <Download style={{ width: '1rem', height: '1rem' }} aria-hidden="true" />
+                          </button>
                         </div>
                       </td>
                     </tr>

@@ -9,7 +9,7 @@ import { sendSuccess } from '../utils/response';
 
 export const getLedgerById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const ledger = await getLedgerByIdService(req.params.id as string);
+    const ledger = await getLedgerByIdService(req.params.id as string, req.user!.userId, req.user!.role);
     sendSuccess(res, ledger);
   } catch (err) {
     next(err);
@@ -18,7 +18,7 @@ export const getLedgerById = async (req: Request, res: Response, next: NextFunct
 
 export const getStudentLedgers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const ledgers = await getStudentLedgersService(req.params.studentId as string);
+    const ledgers = await getStudentLedgersService(req.params.studentId as string, req.user!.userId, req.user!.role);
     sendSuccess(res, ledgers);
   } catch (err) {
     next(err);

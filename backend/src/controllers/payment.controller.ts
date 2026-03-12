@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { z } from 'zod';
 import {
   createOrderService,
   recordManualPaymentService,
   getPaymentByIdService,
   getAllPaymentsService,
+  getReceiptFileService,
 } from '../services/payment.service';
 import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
@@ -40,7 +43,7 @@ export const recordManualPayment = async (req: Request, res: Response, next: Nex
 
 export const getPaymentById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const payment = await getPaymentByIdService(req.params.id as string);
+    const payment = await getPaymentByIdService(req.params.id as string, req.user!.userId, req.user!.role);
     sendSuccess(res, payment);
   } catch (err) {
     next(err);
@@ -58,3 +61,19 @@ export const getAllPayments = async (req: Request, res: Response, next: NextFunc
     next(err);
   }
 };
+
+export const downloadReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const filePath = await getReceiptFileService(
+      req.params.id as string,
+      req.user!.userId,
+      req.user!.role,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
