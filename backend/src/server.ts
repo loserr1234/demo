@@ -20,6 +20,7 @@ import { startMonthlyLedgerJob, startLateFeeJob } from './jobs/ledger.job';
 import { startReconciliationJob } from './jobs/reconciliation.job';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5001;
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
