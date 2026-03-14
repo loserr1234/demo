@@ -5,6 +5,7 @@ import prisma from '../config/prisma';
 import razorpay from '../config/razorpay';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/errors';
 import { generateReceiptPDF } from '../utils/receipt';
+import logger from '../utils/logger';
 
 const generateReceiptNumber = () => {
   const now = new Date();
@@ -115,6 +116,7 @@ export const createOrderService = async (
       },
     });
 
+    logger.info('Payment order created', { orderId: order.id, ledgerId, amount: remaining });
     return {
       orderId: order.id,
       amount: remaining,
@@ -237,6 +239,15 @@ export const recordManualPaymentService = async (
           receiptNumber,
           receiptUrl,
         },
+      });
+
+      logger.info('Manual payment recorded, ledger updated', {
+        paymentId: payment.id,
+        ledgerId: data.ledgerId,
+        amount: remaining,
+        method: data.paymentMethod,
+        newStatus,
+        adminId,
       });
 
       await tx.auditLog.create({
@@ -452,6 +463,14 @@ export const processWebhookService = async (
       return { payment, newStatus, receipt };
     });
 
+    logger.info('Online payment recorded, ledger updated', {
+      paymentId: result.payment.id,
+      gatewayPaymentId,
+      ledgerId,
+      amount: amount / 100,
+      newStatus: result.newStatus,
+    });
+
     return { ...result, duplicate: false };
   } catch (err: any) {
     fs.unlink(path.resolve(receiptUrl), () => { });
@@ -463,6 +482,7 @@ export const processWebhookService = async (
       return { duplicate: true };
     }
 
+    logger.error('Payment processing failed', { gatewayPaymentId, ledgerId, error: (err as Error).message });
     throw err;
   }
 };

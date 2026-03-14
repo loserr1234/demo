@@ -2,13 +2,20 @@ import bcrypt from 'bcryptjs';
 import prisma from '../config/prisma';
 import { signToken } from '../utils/jwt';
 import { UnauthorizedError, BadRequestError } from '../utils/errors';
+import logger from '../utils/logger';
 
 export const loginService = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new UnauthorizedError('incorrect password try again');
+  if (!user) {
+    logger.warn('Failed login attempt: user not found', { email });
+    throw new UnauthorizedError('incorrect password try again');
+  }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) throw new UnauthorizedError('incorrect password try again');
+  if (!valid) {
+    logger.warn('Failed login attempt: invalid password', { email, userId: user.id });
+    throw new UnauthorizedError('incorrect password try again');
+  }
 
   if (user.mustChangePassword) {
     return {

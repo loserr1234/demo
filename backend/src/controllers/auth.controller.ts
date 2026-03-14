@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { loginService, changePasswordService } from '../services/auth.service';
 import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
+import logger from '../utils/logger';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -23,6 +24,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const result = await loginService(email, password);
 
     if ('mustChangePassword' in result && result.mustChangePassword) {
+      logger.info('Login: password change required', { userId: result.user.id, email: result.user.email, role: result.user.role });
       return sendSuccess(res, {
         mustChangePassword: true,
         user: result.user,
@@ -39,6 +41,7 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     });
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
 
+    logger.info('User logged in', { userId: result.user.id, email: result.user.email, role: result.user.role });
     sendSuccess(res, { user: result.user }, 'Login successful');
   } catch (err) {
     if (err instanceof z.ZodError) return next(new BadRequestError(err.errors[0].message));
@@ -46,13 +49,14 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-export const logout = (_req: Request, res: Response) => {
+export const logout = (req: Request, res: Response) => {
   res.clearCookie('school_token', {
     httpOnly: true,
     secure: true,
     sameSite: 'strict',
     path: '/',
   });
+  logger.info('User logged out', { userId: req.user?.userId });
   sendSuccess(res, null, 'Logged out successfully');
 };
 

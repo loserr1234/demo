@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import prisma from '../config/prisma';
+import logger from '../utils/logger';
 
 // Exported so it can be called directly in tests or scripts
 export const runMonthlyLedgerJob = async (month: number, year: number): Promise<number> => {
@@ -43,29 +44,30 @@ export const runMonthlyLedgerJob = async (month: number, year: number): Promise<
     }
   }
 
-  console.log(`[CRON] Monthly ledger job: created ${created} ledgers for ${month}/${year}`);
+  logger.info('Monthly ledger job complete', { created, month, year });
   return created;
 };
 
 // Monthly Ledger Job — runs on 1st of every month at 00:05
 export const startMonthlyLedgerJob = () => {
   cron.schedule('5 0 1 * *', async () => {
-    console.log('[CRON] Running monthly ledger generation job...');
+    logger.info('Cron job start: monthly ledger generation');
     try {
       const now = new Date();
       await runMonthlyLedgerJob(now.getMonth() + 1, now.getFullYear());
+      logger.info('Cron job complete: monthly ledger generation');
     } catch (err) {
-      console.error('[CRON] Monthly ledger job failed:', err);
+      logger.error('Cron job failed: monthly ledger generation', { error: (err as Error).message });
     }
   });
 
-  console.log('[CRON] Monthly ledger job scheduled');
+  logger.info('Cron job scheduled: monthly ledger generation (5 0 1 * *)');
 };
 
 // Late Fee Job — runs daily at 00:30
 export const startLateFeeJob = () => {
   cron.schedule('30 0 * * *', async () => {
-    console.log('[CRON] Running late fee job...');
+    logger.info('Cron job start: late fee application');
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -100,11 +102,11 @@ export const startLateFeeJob = () => {
         updated++;
       }
 
-      console.log(`[CRON] Late fee job: updated ${updated} ledgers`);
+      logger.info('Cron job complete: late fee application', { updated });
     } catch (err) {
-      console.error('[CRON] Late fee job failed:', err);
+      logger.error('Cron job failed: late fee application', { error: (err as Error).message });
     }
   });
 
-  console.log('[CRON] Late fee job scheduled');
+  logger.info('Cron job scheduled: late fee application (30 0 * * *)');
 };

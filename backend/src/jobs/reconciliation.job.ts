@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import prisma from '../config/prisma';
 import razorpay from '../config/razorpay';
 import { processWebhookService } from '../services/payment.service';
+import logger from '../utils/logger';
 
 export const runReconciliationJob = async (): Promise<{ reconciled: number; alerts: number }> => {
   const now = Math.floor(Date.now() / 1000);
@@ -13,7 +14,7 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
   let alerts = 0;
   let hasMore = true;
 
-  console.log('[RECONCILE] Starting reconciliation for last 48 hours...');
+  logger.info('Reconciliation job start', { windowHours: 48 });
 
   while (hasMore) {
     const response = await (razorpay.payments as any).all({ from, to: now, count, skip });
@@ -34,7 +35,7 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
 
       if (!ledgerId) {
         const msg = `ALERT: captured payment ${payment.id} has no ledgerId in notes`;
-        console.warn(`[RECONCILE] ${msg}`);
+        logger.warn('Reconciliation alert: missing ledgerId', { gatewayPaymentId: payment.id, orderId: payment.order_id });
         await prisma.alert.create({
           data: {
             type: 'MISSING_LEDGER_ID',
@@ -55,7 +56,7 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
 
       if (!ledger) {
         const msg = `ALERT: captured payment ${payment.id} references non-existent ledger ${ledgerId}`;
-        console.warn(`[RECONCILE] ${msg}`);
+        logger.warn('Reconciliation alert: ledger not found', { gatewayPaymentId: payment.id, ledgerId });
         await prisma.alert.create({
           data: {
             type: 'LEDGER_NOT_FOUND',
@@ -75,7 +76,7 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
       if (ledger.status === 'PAID' || ledger.status === 'WAIVED') {
         // Ledger is paid but this payment ID isn't recorded — it's truly a duplicate capture
         const msg = `ALERT: captured payment ${payment.id} for already-PAID ledger ${ledgerId}`;
-        console.warn(`[RECONCILE] ${msg}`);
+        logger.warn('Reconciliation alert: duplicate capture on paid ledger', { gatewayPaymentId: payment.id, ledgerId, ledgerStatus: ledger.status });
         await prisma.alert.create({
           data: {
             type: 'DUPLICATE_CAPTURE',
@@ -102,14 +103,14 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
         );
 
         if (result.duplicate) {
-          console.log(`[RECONCILE] Already recorded (duplicate): payment ${payment.id}`);
+          logger.info('Reconciliation: payment already recorded', { gatewayPaymentId: payment.id });
         } else {
-          console.log(`[RECONCILE] RECONCILED: payment ${payment.id} for ledger ${ledgerId}`);
+          logger.info('Reconciliation: payment reconciled', { gatewayPaymentId: payment.id, ledgerId });
           reconciled++;
         }
       } catch (err) {
         const msg = `Failed to reconcile payment ${payment.id}: ${(err as Error).message}`;
-        console.error(`[RECONCILE] ${msg}`);
+        logger.error('Reconciliation: payment failed', { gatewayPaymentId: payment.id, ledgerId, error: (err as Error).message });
         await prisma.alert.create({
           data: {
             type: 'RECONCILE_ERROR',
@@ -125,19 +126,20 @@ export const runReconciliationJob = async (): Promise<{ reconciled: number; aler
     skip += count;
   }
 
-  console.log(`[RECONCILE] Complete: ${reconciled} reconciled, ${alerts} alerts`);
+  logger.info('Reconciliation job complete', { reconciled, alerts });
   return { reconciled, alerts };
 };
 
 export const startReconciliationJob = () => {
   cron.schedule('0 * * * *', async () => {
-    console.log('[RECONCILE] Running hourly reconciliation job...');
+    logger.info('Cron job start: hourly reconciliation');
     try {
       await runReconciliationJob();
+      logger.info('Cron job complete: hourly reconciliation');
     } catch (err) {
-      console.error('[RECONCILE] Job failed:', err);
+      logger.error('Cron job failed: hourly reconciliation', { error: (err as Error).message });
     }
   });
 
-  console.log('[CRON] Reconciliation job scheduled (hourly)');
+  logger.info('Cron job scheduled: reconciliation (0 * * * *)');
 };

@@ -2,12 +2,12 @@ import 'dotenv/config';
 import express, { type Request } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 
+import logger from './utils/logger';
 import prisma from './config/prisma';
 import authRoutes from './routes/auth.routes';
 import adminRoutes from './routes/admin.routes';
@@ -16,6 +16,8 @@ import ledgerRoutes from './routes/ledger.routes';
 import paymentRoutes from './routes/payment.routes';
 import { razorpayWebhook } from './webhooks/razorpay.webhook';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { requestIdMiddleware } from './middleware/requestId';
+import { httpLogger } from './middleware/httpLogger';
 import { startMonthlyLedgerJob, startLateFeeJob } from './jobs/ledger.job';
 import { startReconciliationJob } from './jobs/reconciliation.job';
 
@@ -41,7 +43,10 @@ app.use(cors({
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
-  message: 'Too many requests, please try again later.',
+  handler: (req, res, _next, options) => {
+    logger.warn('Rate limit hit', { ip: req.ip, path: req.path, requestId: req.requestId });
+    res.status(options.statusCode).json({ success: false, message: options.message });
+  },
 });
 app.use('/api/', limiter);
 
@@ -52,10 +57,11 @@ app.post('/api/webhooks/razorpay', express.raw({ type: 'application/json' }), (r
   next();
 }, razorpayWebhook);
 
+app.use(requestIdMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan('dev'));
+app.use(httpLogger);
 
 // Receipts served via authenticated API endpoint — see payment.routes.ts
 
@@ -77,10 +83,12 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 School Management Server running on port ${PORT}`);
-  console.log(`📚 Environment: ${process.env.NODE_ENV}`);
-  console.log(`🔗 Backend URL: ${BACKEND_URL}`);
-  console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL}\n`);
+  logger.info('Server started', {
+    port: PORT,
+    env: process.env.NODE_ENV,
+    backendUrl: BACKEND_URL,
+    frontendUrl: process.env.FRONTEND_URL,
+  });
 
   // Keepalive ping — prevents Neon serverless DB from suspending the connection
   setInterval(async () => {
