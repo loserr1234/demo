@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://demo-production-b77b.up.railway.app/api/:path*"
+      "destination": "https://api.stdn.in/api/:path*"
     },
     {
       "source": "/(.*)",
